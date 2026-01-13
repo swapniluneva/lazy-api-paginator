@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/lazy-api-paginator.svg)](https://www.npmjs.com/package/lazy-api-paginator)
 [![npm downloads](https://img.shields.io/npm/dm/lazy-api-paginator.svg)](https://www.npmjs.com/package/lazy-api-paginator)
-[![CI](https://github.com/YOUR_USERNAME/lazy-api-paginator/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/lazy-api-paginator/actions/workflows/ci.yml)
+[![CI](https://github.com/swapniluneva/lazy-api-paginator/actions/workflows/ci.yml/badge.svg)](https://github.com/swapniluneva/lazy-api-paginator/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/swapniluneva/lazy-api-paginator/graph/badge.svg?token=A2D0ER8MCN)](https://codecov.io/gh/swapniluneva/lazy-api-paginator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
