@@ -150,6 +150,20 @@ export type NextPageExtractor<TResponse> = (
 ) => string | null | undefined;
 
 /**
+ * SSRF protection configuration
+ * Requires ssrf-agent-guard package to be installed
+ */
+export interface SsrfProtectionConfig {
+  /** Enable SSRF protection (default: false) */
+  enabled: boolean;
+  /**
+   * Custom ssrf-agent-guard options
+   * @see https://www.npmjs.com/package/ssrf-agent-guard
+   */
+  options?: Record<string, unknown>;
+}
+
+/**
  * Main configuration for the lazy paginator
  */
 export interface LazyPaginatorConfig<TResponse, TItem> {
@@ -167,6 +181,11 @@ export interface LazyPaginatorConfig<TResponse, TItem> {
   hooks?: PaginatorHooks<TResponse, TItem>;
   /** Custom fetch function (defaults to global fetch) */
   fetchFn?: typeof fetch;
+  /**
+   * SSRF protection configuration for server-to-server calls
+   * Requires ssrf-agent-guard package: npm install ssrf-agent-guard
+   */
+  ssrfProtection?: SsrfProtectionConfig;
 }
 
 /**

@@ -11,6 +11,7 @@ Complete API documentation for `lazy-api-paginator`.
 - [Error Classes](#error-classes)
 - [Retry Utilities](#retry-utilities)
 - [Built-in Pagination Strategies](#built-in-pagination-strategies)
+- [SSRF Protection](#ssrf-protection)
 - [Type Definitions](#type-definitions)
 
 ---
@@ -698,6 +699,102 @@ interface KeysetStrategyConfig {
 
 ---
 
+## SSRF Protection
+
+Utilities for protecting against Server-Side Request Forgery (SSRF) attacks when making server-to-server API calls.
+
+**Requirements:** Install the optional peer dependency:
+```bash
+npm install ssrf-agent-guard
+```
+
+### `SsrfProtectionConfig`
+
+Configuration for SSRF protection.
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `enabled` | `boolean` | Yes | - | Enable SSRF protection |
+| `options` | `Record<string, unknown>` | No | `{}` | Custom ssrf-agent-guard options |
+
+**Example:**
+```typescript
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  extractItems: (r) => r.items,
+  getNextPageUrl: (r) => r.next,
+  ssrfProtection: {
+    enabled: true,
+    options: {
+      mode: 'block',
+    },
+  },
+});
+```
+
+### `createSecureFetch(config, baseFetch?)`
+
+Creates a fetch function with SSRF protection enabled.
+
+**Parameters:**
+- `config: SsrfProtectionConfig` - SSRF protection configuration
+- `baseFetch?: typeof fetch` - Base fetch function to wrap (defaults to global `fetch`)
+
+**Returns:** `Promise<typeof fetch>`
+
+**Example:**
+```typescript
+import { createSecureFetch } from 'lazy-api-paginator';
+
+const secureFetch = await createSecureFetch({ enabled: true });
+
+// Use with paginator
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  extractItems: (r) => r.items,
+  getNextPageUrl: (r) => r.next,
+  fetchFn: secureFetch,
+});
+
+// Or use directly
+const response = await secureFetch('https://api.example.com/data');
+```
+
+### `validateUrl(url, options?)`
+
+Validates a URL by creating an SSRF-protected agent. Useful for pre-validating URLs before making requests.
+
+**Parameters:**
+- `url: string` - The URL to validate
+- `options?: Record<string, unknown>` - Optional ssrf-agent-guard options
+
+**Returns:** `Promise<boolean>` - Returns `true` if agent creation succeeds
+
+**Note:** The actual SSRF blocking happens at request time when the agent is used, not during agent creation.
+
+**Example:**
+```typescript
+import { validateUrl } from 'lazy-api-paginator';
+
+const isValid = await validateUrl('https://api.example.com/data');
+console.log(isValid); // true
+```
+
+### What SSRF Protection Blocks
+
+When enabled, ssrf-agent-guard blocks requests to:
+
+- **Private IP addresses:** `192.168.x.x`, `10.x.x.x`, `172.16.x.x - 172.31.x.x`
+- **Loopback addresses:** `127.0.0.1`, `localhost`
+- **Cloud metadata endpoints:**
+  - AWS: `169.254.169.254`
+  - GCP: `metadata.google.internal`
+  - Azure: `169.254.169.254`
+  - And more...
+- **Internal hostnames and DNS rebinding attacks**
+
+---
+
 ## Type Definitions
 
 ### `HttpMethod`
@@ -839,8 +936,13 @@ import {
   // Built-in pagination strategies
   strategies,
 
+  // SSRF protection utilities
+  createSecureFetch,
+  validateUrl,
+
   // Types (TypeScript only)
   type LazyPaginatorConfig,
+  type SsrfProtectionConfig,
   type RequestConfig,
   type RetryConfig,
   type PaginatorHooks,

@@ -15,6 +15,7 @@ A TypeScript module for lazily fetching paginated API data using async generator
 - Built-in strategies for cursor, offset, page number, link header, and keyset pagination
 - Exponential backoff retry with configurable jitter
 - Lifecycle hooks: `onBeforeFetch`, `onAfterFetch`, `onError`, `onData`
+- SSRF protection for secure server-to-server calls (via [ssrf-agent-guard](https://www.npmjs.com/package/ssrf-agent-guard))
 - Full TypeScript support
 - Works with both ESM and CommonJS
 
@@ -191,6 +192,50 @@ const keysetPaginator = createPaginator({
 });
 ```
 
+### SSRF Protection
+
+For server-to-server calls, enable SSRF (Server-Side Request Forgery) protection to block requests to internal networks, cloud metadata endpoints, and other potentially dangerous destinations.
+
+First, install the optional dependency:
+
+```bash
+npm install ssrf-agent-guard
+```
+
+Then enable SSRF protection in your paginator:
+
+```typescript
+import { createPaginator } from 'lazy-api-paginator';
+
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  extractItems: (r) => r.items,
+  getNextPageUrl: (r) => r.next,
+  ssrfProtection: {
+    enabled: true,
+    options: {
+      // Optional: customize ssrf-agent-guard options
+      mode: 'block', // 'block' | 'report' | 'allow'
+    },
+  },
+});
+```
+
+You can also use the standalone `createSecureFetch` utility:
+
+```typescript
+import { createSecureFetch, createPaginator } from 'lazy-api-paginator';
+
+const secureFetch = await createSecureFetch({ enabled: true });
+
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  extractItems: (r) => r.items,
+  getNextPageUrl: (r) => r.next,
+  fetchFn: secureFetch,
+});
+```
+
 ## API Reference
 
 For complete API documentation including all types, interfaces, error classes, and usage patterns, see [API.md](./API.md).
@@ -210,6 +255,7 @@ Creates a new lazy paginator instance.
 | `retry` | `RetryConfig` | No | Retry configuration |
 | `hooks` | `PaginatorHooks` | No | Lifecycle hooks |
 | `fetchFn` | `typeof fetch` | No | Custom fetch function |
+| `ssrfProtection` | `SsrfProtectionConfig` | No | SSRF protection settings |
 
 ### Hooks
 

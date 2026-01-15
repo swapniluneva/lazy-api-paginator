@@ -12,6 +12,7 @@ import {
   HttpError,
 } from './types.js';
 import { mergeRetryConfig, calculateBackoffDelay, shouldRetry } from './retry.js';
+import { createSecureFetch } from './ssrf.js';
 
 /**
  * Default request configuration
@@ -32,13 +33,30 @@ export class LazyPaginator<TResponse, TItem> {
   private readonly config: LazyPaginatorConfig<TResponse, TItem>;
   private readonly requestConfig: RequestConfig;
   private readonly retryConfig: ReturnType<typeof mergeRetryConfig>;
-  private readonly fetchFn: typeof fetch;
+  private readonly baseFetchFn: typeof fetch;
+  private secureFetchFn: typeof fetch | null = null;
 
   constructor(config: LazyPaginatorConfig<TResponse, TItem>) {
     this.config = config;
     this.requestConfig = { ...DEFAULT_REQUEST_CONFIG, ...config.requestConfig };
     this.retryConfig = mergeRetryConfig(config.retry);
-    this.fetchFn = config.fetchFn ?? fetch;
+    this.baseFetchFn = config.fetchFn ?? fetch;
+  }
+
+  /**
+   * Gets the fetch function, initializing SSRF protection if configured
+   */
+  private async getFetchFn(): Promise<typeof fetch> {
+    if (this.config.ssrfProtection?.enabled) {
+      if (!this.secureFetchFn) {
+        this.secureFetchFn = await createSecureFetch(
+          this.config.ssrfProtection,
+          this.baseFetchFn
+        );
+      }
+      return this.secureFetchFn;
+    }
+    return this.baseFetchFn;
   }
 
   /**
@@ -198,7 +216,8 @@ export class LazyPaginator<TResponse, TItem> {
     }, this.requestConfig.timeout || 30000);
 
     try {
-      const response = await this.fetchFn(url, {
+      const fetchFn = await this.getFetchFn();
+      const response = await fetchFn(url, {
         ...fetchOptions,
         signal: controller.signal,
       });

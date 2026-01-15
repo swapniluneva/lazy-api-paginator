@@ -16,6 +16,7 @@ export type {
   ItemExtractor,
   NextPageExtractor,
   LazyPaginatorConfig,
+  SsrfProtectionConfig,
 } from './types.js';
 
 // Error exports
@@ -45,3 +46,6 @@ export type {
   LinkHeaderStrategyConfig,
   KeysetStrategyConfig,
 } from './strategies.js';
+
+// SSRF protection utilities
+export { createSecureFetch, validateUrl } from './ssrf.js';
