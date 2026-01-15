@@ -10,6 +10,7 @@ Complete API documentation for `lazy-api-paginator`.
 - [Hook Types](#hook-types)
 - [Error Classes](#error-classes)
 - [Retry Utilities](#retry-utilities)
+- [Built-in Pagination Strategies](#built-in-pagination-strategies)
 - [Type Definitions](#type-definitions)
 
 ---
@@ -471,6 +472,232 @@ Utility function to pause execution.
 
 ---
 
+## Built-in Pagination Strategies
+
+Pre-built extractors for common API pagination patterns. These eliminate boilerplate by providing ready-to-use `extractItems` and `getNextPageUrl` functions.
+
+```typescript
+import { createPaginator, strategies } from 'lazy-api-paginator';
+```
+
+### `strategies.cursor(config)`
+
+Creates extractors for cursor-based pagination (Slack, Stripe, Notion style).
+
+**Config:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `dataPath` | `string` | Yes | - | Path to data array (e.g., `'data'`, `'data.items'`) |
+| `cursorPath` | `string` | Yes | - | Path to cursor value (e.g., `'next_cursor'`, `'meta.cursor'`) |
+| `cursorParam` | `string` | No | `'cursor'` | Query parameter name for cursor |
+
+**Example:**
+```typescript
+// API returns: { data: [...], next_cursor: "abc123" }
+const paginator = createPaginator({
+  initialUrl: 'https://api.slack.com/users.list',
+  ...strategies.cursor({
+    dataPath: 'data',
+    cursorPath: 'next_cursor',
+  }),
+});
+```
+
+### `strategies.offset(config)`
+
+Creates extractors for offset-based pagination (traditional REST APIs).
+
+**Config:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `dataPath` | `string` | Yes | - | Path to data array |
+| `totalPath` | `string` | Yes | - | Path to total count |
+| `pageSize` | `number` | Yes | - | Items per page |
+| `offsetParam` | `string` | No | `'offset'` | Query parameter for offset |
+| `limitParam` | `string` | No | `'limit'` | Query parameter for limit |
+
+**Example:**
+```typescript
+// API returns: { items: [...], total: 500 }
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items?offset=0&limit=100',
+  ...strategies.offset({
+    dataPath: 'items',
+    totalPath: 'total',
+    pageSize: 100,
+  }),
+});
+```
+
+### `strategies.pageNumber(config)`
+
+Creates extractors for page number-based pagination (Laravel, Django style).
+
+**Config:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `dataPath` | `string` | Yes | - | Path to data array |
+| `totalPagesPath` | `string` | No | - | Path to total pages count |
+| `currentPagePath` | `string` | No | - | Path to current page number |
+| `hasNextPath` | `string` | No | - | Path to boolean indicating more pages |
+| `pageParam` | `string` | No | `'page'` | Query parameter for page number |
+| `oneIndexed` | `boolean` | No | `true` | Whether pages start at 1 |
+
+**Example:**
+```typescript
+// API returns: { results: [...], total_pages: 10 }
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items?page=1',
+  ...strategies.pageNumber({
+    dataPath: 'results',
+    totalPagesPath: 'total_pages',
+  }),
+});
+
+// Or with has_more flag:
+// API returns: { data: [...], has_more: true }
+const paginator2 = createPaginator({
+  initialUrl: 'https://api.example.com/items?page=1',
+  ...strategies.pageNumber({
+    dataPath: 'data',
+    hasNextPath: 'has_more',
+  }),
+});
+```
+
+### `strategies.linkHeader(config)`
+
+Creates extractors for Link header-based pagination (GitHub API style).
+
+**Config:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `dataPath` | `string` | No | `''` | Path to data array (empty for root array) |
+| `rel` | `string` | No | `'next'` | Link relation to look for |
+
+**Returns:** `StrategyResult` with additional methods:
+- `setNextFromHeader(header: string)` - Parse and set next URL from Link header
+- `setNextUrl(url: string | null)` - Directly set the next URL
+
+**Example:**
+```typescript
+// GitHub API returns array with Link header
+const linkStrategy = strategies.linkHeader({ dataPath: '' });
+
+const paginator = createPaginator({
+  initialUrl: 'https://api.github.com/repos/owner/repo/issues',
+  ...linkStrategy,
+  hooks: {
+    onAfterFetch: ({ response }) => {
+      const linkHeader = response.headers['link'];
+      if (linkHeader) {
+        linkStrategy.setNextFromHeader(linkHeader);
+      }
+    },
+  },
+});
+```
+
+### `strategies.keyset(config)`
+
+Creates extractors for keyset/seek pagination (efficient for large datasets).
+
+**Config:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `dataPath` | `string` | Yes | - | Path to data array |
+| `keyPath` | `string` | Yes | - | Path to key field in each item (e.g., `'id'`) |
+| `afterParam` | `string` | No | `'after'` | Query parameter for "after" key |
+| `hasMorePath` | `string` | No | - | Path to boolean indicating more items |
+| `minPageSize` | `number` | No | - | Stop if fewer items returned |
+
+**Example:**
+```typescript
+// API returns: { data: [{ id: 1 }, { id: 2 }], has_more: true }
+const paginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  ...strategies.keyset({
+    dataPath: 'data',
+    keyPath: 'id',
+    hasMorePath: 'has_more',
+  }),
+});
+```
+
+### Utility Functions
+
+#### `strategies.parseLinkHeader(header)`
+
+Parses a Link header string into a map of rel → URL.
+
+```typescript
+const links = strategies.parseLinkHeader(
+  '<https://api.example.com?page=2>; rel="next", <https://api.example.com?page=10>; rel="last"'
+);
+// { next: 'https://api.example.com?page=2', last: 'https://api.example.com?page=10' }
+```
+
+#### `strategies.getByPath(obj, path)`
+
+Gets a nested value from an object using dot notation.
+
+```typescript
+const value = strategies.getByPath({ data: { items: [1, 2] } }, 'data.items');
+// [1, 2]
+```
+
+### Strategy Type Definitions
+
+```typescript
+interface StrategyResult<TResponse, TItem> {
+  extractItems: ItemExtractor<TResponse, TItem>;
+  getNextPageUrl: NextPageExtractor<TResponse>;
+}
+
+interface CursorStrategyConfig {
+  dataPath: string;
+  cursorPath: string;
+  cursorParam?: string;
+}
+
+interface OffsetStrategyConfig {
+  dataPath: string;
+  totalPath: string;
+  pageSize: number;
+  offsetParam?: string;
+  limitParam?: string;
+}
+
+interface PageNumberStrategyConfig {
+  dataPath: string;
+  totalPagesPath?: string;
+  currentPagePath?: string;
+  hasNextPath?: string;
+  pageParam?: string;
+  oneIndexed?: boolean;
+}
+
+interface LinkHeaderStrategyConfig {
+  dataPath?: string;
+  rel?: string;
+}
+
+interface KeysetStrategyConfig {
+  dataPath: string;
+  keyPath: string;
+  afterParam?: string;
+  hasMorePath?: string;
+  minPageSize?: number;
+}
+```
+
+---
+
 ## Type Definitions
 
 ### `HttpMethod`
@@ -609,6 +836,9 @@ import {
   withRetry,
   sleep,
 
+  // Built-in pagination strategies
+  strategies,
+
   // Types (TypeScript only)
   type LazyPaginatorConfig,
   type RequestConfig,
@@ -623,5 +853,11 @@ import {
   type HttpMethod,
   type ItemExtractor,
   type NextPageExtractor,
+  type StrategyResult,
+  type CursorStrategyConfig,
+  type OffsetStrategyConfig,
+  type PageNumberStrategyConfig,
+  type LinkHeaderStrategyConfig,
+  type KeysetStrategyConfig,
 } from 'lazy-api-paginator';
 ```

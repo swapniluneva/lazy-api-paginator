@@ -12,6 +12,7 @@ A TypeScript module for lazily fetching paginated API data using async generator
 
 - Lazy loading of paginated API data using async generators
 - Iterate over items one-by-one without loading all pages into memory
+- Built-in strategies for cursor, offset, page number, link header, and keyset pagination
 - Exponential backoff retry with configurable jitter
 - Lifecycle hooks: `onBeforeFetch`, `onAfterFetch`, `onError`, `onData`
 - Full TypeScript support
@@ -129,6 +130,65 @@ const firstTen = await paginator.take(10);
 
 // Get all items (use with caution for large datasets)
 const allUsers = await paginator.toArray();
+```
+
+### Built-in Pagination Strategies
+
+Use pre-built strategies to eliminate boilerplate for common API patterns:
+
+```typescript
+import { createPaginator, strategies } from 'lazy-api-paginator';
+
+// Cursor-based (Slack, Stripe, Notion)
+const cursorPaginator = createPaginator({
+  initialUrl: 'https://api.slack.com/users.list',
+  ...strategies.cursor({
+    dataPath: 'members',
+    cursorPath: 'response_metadata.next_cursor',
+  }),
+});
+
+// Offset-based (traditional REST APIs)
+const offsetPaginator = createPaginator({
+  initialUrl: 'https://api.example.com/items?offset=0&limit=100',
+  ...strategies.offset({
+    dataPath: 'items',
+    totalPath: 'total',
+    pageSize: 100,
+  }),
+});
+
+// Page number-based (Laravel, Django)
+const pagePaginator = createPaginator({
+  initialUrl: 'https://api.example.com/items?page=1',
+  ...strategies.pageNumber({
+    dataPath: 'results',
+    totalPagesPath: 'total_pages',
+  }),
+});
+
+// Link header (GitHub API)
+const linkStrategy = strategies.linkHeader({ dataPath: '' });
+const githubPaginator = createPaginator({
+  initialUrl: 'https://api.github.com/repos/owner/repo/issues',
+  ...linkStrategy,
+  hooks: {
+    onAfterFetch: ({ response }) => {
+      const link = response.headers['link'];
+      if (link) linkStrategy.setNextFromHeader(link);
+    },
+  },
+});
+
+// Keyset/Seek (efficient for large datasets)
+const keysetPaginator = createPaginator({
+  initialUrl: 'https://api.example.com/items',
+  ...strategies.keyset({
+    dataPath: 'data',
+    keyPath: 'id',
+    hasMorePath: 'has_more',
+  }),
+});
 ```
 
 ## API Reference

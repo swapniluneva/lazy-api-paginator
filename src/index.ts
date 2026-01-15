@@ -34,3 +34,14 @@ export {
   sleep,
   DEFAULT_RETRY_CONFIG,
 } from './retry.js';
+
+// Built-in pagination strategies
+export { strategies } from './strategies.js';
+export type {
+  StrategyResult,
+  CursorStrategyConfig,
+  OffsetStrategyConfig,
+  PageNumberStrategyConfig,
+  LinkHeaderStrategyConfig,
+  KeysetStrategyConfig,
+} from './strategies.js';
