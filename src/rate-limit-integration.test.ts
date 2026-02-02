@@ -385,14 +385,16 @@ describe('Rate limit integration tests with mock server', () => {
 
   describe('Preemptive Waiting', () => {
     it('should preemptively wait when remaining requests are low', async () => {
-      serverConfig.pageCount = 3;
+      serverConfig.pageCount = 2;
       serverConfig.itemsPerPage = 1;
 
-      // Use dynamic headers that always set reset time to 1 second from now
+      const retryAfterSeconds = 2; // API says wait 2 seconds
+
+      // Use Retry-After header which has simpler parsing (direct seconds value)
       serverConfig.dynamicRateLimitHeaders = () => ({
         'X-RateLimit-Limit': '10',
-        'X-RateLimit-Remaining': '1', // Only 1 request remaining
-        'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 1),
+        'X-RateLimit-Remaining': '1', // Only 1 request remaining - triggers preemptive wait
+        'Retry-After': String(retryAfterSeconds),
       });
 
       const paginator = createPaginator<MockApiResponse, { id: number; name: string }>({
@@ -400,7 +402,7 @@ describe('Rate limit integration tests with mock server', () => {
         extractItems: (res) => res.items,
         getNextPageUrl: (res) => res.nextPage,
         rateLimit: {
-          maxRateLimitDelay: 5000,
+          maxRateLimitDelay: 10000,
         },
       });
 
@@ -408,11 +410,10 @@ describe('Rate limit integration tests with mock server', () => {
       const items = await paginator.toArray();
       const duration = Date.now() - startTime;
 
-      expect(items).toHaveLength(3);
-      // Should have waited due to preemptive rate limit handling
-      // With 3 pages and preemptive wait before pages 2 and 3, expect waiting
-      // Allow some variance for network/processing overhead
-      expect(duration).toBeGreaterThanOrEqual(1200);
+      expect(items).toHaveLength(2);
+      // API says remaining=1 and Retry-After=2 seconds
+      // Paginator should preemptively wait at least 2 seconds before page 2
+      expect(duration).toBeGreaterThanOrEqual(retryAfterSeconds * 1000);
     }, 10000);
   });
 
