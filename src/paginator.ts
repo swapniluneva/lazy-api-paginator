@@ -10,9 +10,21 @@ import {
   MaxRetriesExceededError,
   FetchTimeoutError,
   HttpError,
+  RateLimitState,
+  RateLimitHitContext,
 } from './types.js';
 import { mergeRetryConfig, calculateBackoffDelay, shouldRetry } from './retry.js';
 import { createSecureFetch } from './ssrf.js';
+import {
+  mergeRateLimitConfig,
+  createRateLimitState,
+  parseStandardRateLimitHeaders,
+  calculateThrottleDelay,
+  calculateRateLimitDelay,
+  calculatePreemptiveDelay,
+  shouldPreemptiveWait,
+  sleep,
+} from './rate-limit.js';
 
 /**
  * Default request configuration
@@ -33,14 +45,18 @@ export class LazyPaginator<TResponse, TItem> {
   private readonly config: LazyPaginatorConfig<TResponse, TItem>;
   private readonly requestConfig: RequestConfig;
   private readonly retryConfig: ReturnType<typeof mergeRetryConfig>;
+  private readonly rateLimitConfig: ReturnType<typeof mergeRateLimitConfig>;
   private readonly baseFetchFn: typeof fetch;
   private secureFetchFn: typeof fetch | null = null;
+  private rateLimitState: RateLimitState;
 
   constructor(config: LazyPaginatorConfig<TResponse, TItem>) {
     this.config = config;
     this.requestConfig = { ...DEFAULT_REQUEST_CONFIG, ...config.requestConfig };
     this.retryConfig = mergeRetryConfig(config.retry);
+    this.rateLimitConfig = mergeRateLimitConfig(config.rateLimit);
     this.baseFetchFn = config.fetchFn ?? fetch;
+    this.rateLimitState = createRateLimitState();
   }
 
   /**
@@ -181,12 +197,29 @@ export class LazyPaginator<TResponse, TItem> {
   }
 
   /**
-   * Performs a single page fetch with hooks
+   * Performs a single page fetch with hooks and rate limiting
    */
   private async fetchPage(
     url: string,
     pagination: PaginationState
   ): Promise<ApiResponse<TResponse>> {
+    // Apply throttle delay (respects requestsPerSecond / minRequestInterval)
+    const throttleDelay = calculateThrottleDelay(this.rateLimitConfig, this.rateLimitState);
+    if (throttleDelay > 0) {
+      await sleep(throttleDelay);
+    }
+
+    // Apply preemptive delay if rate limit is about to be exhausted
+    if (shouldPreemptiveWait(this.rateLimitState.currentLimitInfo)) {
+      const preemptiveDelay = calculatePreemptiveDelay(
+        this.rateLimitState.currentLimitInfo,
+        this.rateLimitConfig.maxRateLimitDelay
+      );
+      if (preemptiveDelay > 0) {
+        await sleep(preemptiveDelay);
+      }
+    }
+
     // Call onBeforeFetch hook
     if (this.config.hooks?.onBeforeFetch) {
       const beforeContext: BeforeFetchContext = {
@@ -224,6 +257,53 @@ export class LazyPaginator<TResponse, TItem> {
 
       clearTimeout(timeoutId);
 
+      // Update rate limit state with request time
+      this.rateLimitState.lastRequestTime = Date.now();
+
+      // Convert headers to plain object
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
+      // Parse rate limit headers
+      const rateLimitInfo = this.rateLimitConfig.parseRateLimitHeaders
+        ? this.rateLimitConfig.parseRateLimitHeaders(headers)
+        : parseStandardRateLimitHeaders(headers);
+
+      // Update rate limit state with current info
+      this.rateLimitState.currentLimitInfo = rateLimitInfo;
+
+      // Handle rate limited response (429)
+      if (response.status === 429) {
+        const rateLimitDelay = calculateRateLimitDelay(
+          this.rateLimitConfig,
+          rateLimitInfo,
+          response.status
+        );
+
+        // Call onRateLimitHit callback if configured
+        if (this.rateLimitConfig.onRateLimitHit) {
+          const rateLimitContext: RateLimitHitContext = {
+            url,
+            status: response.status,
+            rateLimitInfo: rateLimitInfo || {},
+            delayMs: rateLimitDelay,
+            pagination,
+          };
+          await this.rateLimitConfig.onRateLimitHit(rateLimitContext);
+        }
+
+        // Wait for the rate limit cooldown period
+        if (rateLimitDelay > 0) {
+          await sleep(rateLimitDelay);
+        }
+
+        // Throw HttpError so retry logic can handle it
+        const responseBody = await response.text().catch(() => undefined);
+        throw new HttpError(url, response.status, response.statusText, responseBody);
+      }
+
       if (!response.ok) {
         const responseBody = await response.text().catch(() => undefined);
         throw new HttpError(url, response.status, response.statusText, responseBody);
@@ -231,12 +311,6 @@ export class LazyPaginator<TResponse, TItem> {
 
       const data = (await response.json()) as TResponse;
       const duration = Date.now() - startTime;
-
-      // Convert headers to plain object
-      const headers: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
 
       const apiResponse: ApiResponse<TResponse> = {
         data,

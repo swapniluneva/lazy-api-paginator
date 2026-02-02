@@ -17,6 +17,10 @@ export type {
   NextPageExtractor,
   LazyPaginatorConfig,
   SsrfProtectionConfig,
+  RateLimitConfig,
+  RateLimitInfo,
+  RateLimitState,
+  RateLimitHitContext,
 } from './types.js';
 
 // Error exports
@@ -49,3 +53,15 @@ export type {
 
 // SSRF protection utilities
 export { createSecureFetch, validateUrl } from './ssrf.js';
+
+// Rate limiting utilities (for advanced usage)
+export {
+  parseStandardRateLimitHeaders,
+  calculateThrottleDelay,
+  calculateRateLimitDelay,
+  calculatePreemptiveDelay,
+  shouldPreemptiveWait,
+  mergeRateLimitConfig,
+  createRateLimitState,
+  DEFAULT_RATE_LIMIT_CONFIG,
+} from './rate-limit.js';

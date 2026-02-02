@@ -10,6 +10,7 @@ Complete API documentation for `lazy-api-paginator`.
 - [Hook Types](#hook-types)
 - [Error Classes](#error-classes)
 - [Retry Utilities](#retry-utilities)
+- [Rate Limiting](#rate-limiting)
 - [Built-in Pagination Strategies](#built-in-pagination-strategies)
 - [SSRF Protection](#ssrf-protection)
 - [Type Definitions](#type-definitions)
@@ -137,6 +138,7 @@ Main configuration object for creating a paginator.
 | `getNextPageUrl` | `NextPageExtractor<TResponse>` | Yes | Function to get next page URL; return `null` or `undefined` to stop pagination |
 | `requestConfig` | `RequestConfig` | No | HTTP request configuration |
 | `retry` | `RetryConfig` | No | Retry strategy configuration |
+| `rateLimit` | `RateLimitConfig` | No | Rate limiting configuration |
 | `hooks` | `PaginatorHooks<TResponse, TItem>` | No | Lifecycle callbacks |
 | `fetchFn` | `typeof fetch` | No | Custom fetch function (defaults to global `fetch`) |
 
@@ -470,6 +472,152 @@ Utility function to pause execution.
 - `ms: number` - Milliseconds to sleep
 
 **Returns:** `Promise<void>`
+
+---
+
+## Rate Limiting
+
+Configure request throttling and automatic handling of API rate limits. The paginator can throttle outgoing requests, parse rate limit headers, and automatically handle 429 (Too Many Requests) responses.
+
+### `RateLimitConfig`
+
+Configuration for rate limiting behavior.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `requestsPerSecond` | `number` | `0` | Maximum requests per second (0 = disabled) |
+| `minRequestInterval` | `number` | `0` | Minimum milliseconds between requests (overrides `requestsPerSecond` if set) |
+| `respectRetryAfter` | `boolean` | `true` | Whether to respect `Retry-After` headers from 429 responses |
+| `maxRateLimitDelay` | `number` | `60000` | Maximum delay when rate limited (in milliseconds) |
+| `parseRateLimitHeaders` | `(headers: Record<string, string>) => RateLimitInfo \| null` | - | Custom function to extract rate limit info from headers |
+| `onRateLimitHit` | `(context: RateLimitHitContext) => void \| Promise<void>` | - | Callback when rate limit is detected |
+
+**Example:**
+```typescript
+{
+  rateLimit: {
+    requestsPerSecond: 10,        // 10 requests per second max
+    maxRateLimitDelay: 30000,     // Wait up to 30 seconds when rate limited
+    respectRetryAfter: true,
+    onRateLimitHit: ({ url, status, delayMs }) => {
+      console.log(`Rate limited on ${url}, waiting ${delayMs}ms`);
+    },
+  }
+}
+```
+
+### `RateLimitInfo`
+
+Information extracted from rate limit response headers.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `limit` | `number \| undefined` | Total requests allowed in the current window |
+| `remaining` | `number \| undefined` | Remaining requests in the current window |
+| `reset` | `number \| undefined` | Unix timestamp (seconds) when the rate limit resets |
+| `retryAfter` | `number \| undefined` | Seconds until the rate limit resets |
+
+### `RateLimitHitContext`
+
+Context passed to the `onRateLimitHit` callback.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | `string` | URL that triggered the rate limit |
+| `status` | `number` | HTTP status code (usually 429) |
+| `rateLimitInfo` | `RateLimitInfo` | Parsed rate limit info from headers |
+| `delayMs` | `number` | Delay that will be applied in milliseconds |
+| `pagination` | `PaginationState` | Current pagination state |
+
+### Supported Rate Limit Headers
+
+The paginator automatically parses these common header formats:
+
+- **GitHub/Twitter style:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- **Alternative format:** `X-Rate-Limit-Limit`, `X-Rate-Limit-Remaining`, `X-Rate-Limit-Reset`
+- **IETF draft:** `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`
+- **RFC 7231:** `Retry-After` (seconds or HTTP-date)
+
+### Rate Limit Utilities
+
+#### `parseStandardRateLimitHeaders(headers)`
+
+Parses standard rate limit headers from an API response.
+
+**Parameters:**
+- `headers: Record<string, string>` - Response headers
+
+**Returns:** `RateLimitInfo | null`
+
+**Example:**
+```typescript
+import { parseStandardRateLimitHeaders } from 'lazy-api-paginator';
+
+const info = parseStandardRateLimitHeaders({
+  'X-RateLimit-Limit': '100',
+  'X-RateLimit-Remaining': '5',
+  'X-RateLimit-Reset': '1700000000',
+});
+// { limit: 100, remaining: 5, reset: 1700000000, retryAfter: undefined }
+```
+
+#### `DEFAULT_RATE_LIMIT_CONFIG`
+
+Readonly object containing default rate limit configuration values.
+
+```typescript
+const DEFAULT_RATE_LIMIT_CONFIG = {
+  requestsPerSecond: 0,
+  respectRetryAfter: true,
+  maxRateLimitDelay: 60000,
+  minRequestInterval: 0,
+  parseRateLimitHeaders: undefined,
+  onRateLimitHit: undefined,
+};
+```
+
+### Rate Limiting Behavior
+
+1. **Request Throttling:** When `requestsPerSecond` or `minRequestInterval` is set, the paginator waits between requests to stay within the limit.
+
+2. **429 Response Handling:** When a 429 response is received:
+   - The `onRateLimitHit` callback is called (if configured)
+   - The paginator waits for the duration specified by `Retry-After` header (or calculates from `reset` timestamp)
+   - The request is automatically retried
+
+3. **Preemptive Waiting:** When the `remaining` header indicates the rate limit is about to be exhausted (≤1 requests remaining), the paginator proactively waits until the reset time.
+
+4. **Delay Capping:** All delays are capped at `maxRateLimitDelay` to prevent excessively long waits.
+
+**Example with all rate limit features:**
+```typescript
+const paginator = createPaginator<ApiResponse, User>({
+  initialUrl: 'https://api.example.com/users',
+  extractItems: (response) => response.data,
+  getNextPageUrl: (response) => response.nextCursor,
+  rateLimit: {
+    requestsPerSecond: 5,           // Max 5 requests per second
+    maxRateLimitDelay: 120000,      // Wait up to 2 minutes
+    respectRetryAfter: true,
+    parseRateLimitHeaders: (headers) => {
+      // Custom header parsing for non-standard APIs
+      return {
+        remaining: parseInt(headers['x-custom-remaining'] || '100', 10),
+        reset: parseInt(headers['x-custom-reset'] || '0', 10),
+      };
+    },
+    onRateLimitHit: async ({ url, delayMs, rateLimitInfo }) => {
+      console.log(`Rate limit hit on ${url}`);
+      console.log(`Remaining: ${rateLimitInfo.remaining}, waiting ${delayMs}ms`);
+      // Could also send alerts, log to monitoring, etc.
+    },
+  },
+  retry: {
+    maxRetries: 5,
+    retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+  },
+});
+```
 
 ---
 
@@ -933,6 +1081,11 @@ import {
   withRetry,
   sleep,
 
+  // Rate limit utilities
+  DEFAULT_RATE_LIMIT_CONFIG,
+  mergeRateLimitConfig,
+  parseStandardRateLimitHeaders,
+
   // Built-in pagination strategies
   strategies,
 
@@ -945,6 +1098,9 @@ import {
   type SsrfProtectionConfig,
   type RequestConfig,
   type RetryConfig,
+  type RateLimitConfig,
+  type RateLimitInfo,
+  type RateLimitHitContext,
   type PaginatorHooks,
   type BeforeFetchContext,
   type AfterFetchContext,

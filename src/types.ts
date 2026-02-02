@@ -164,6 +164,64 @@ export interface SsrfProtectionConfig {
 }
 
 /**
+ * Rate limiting configuration
+ */
+export interface RateLimitConfig {
+  /** Maximum requests per second (throttling). Set to 0 to disable. (default: 0) */
+  requestsPerSecond?: number;
+  /** Whether to respect Retry-After header from 429 responses (default: true) */
+  respectRetryAfter?: boolean;
+  /** Maximum delay to wait when rate limited in milliseconds (default: 60000) */
+  maxRateLimitDelay?: number;
+  /** Minimum delay between requests in milliseconds (overrides requestsPerSecond if set) */
+  minRequestInterval?: number;
+  /** Custom function to extract rate limit info from response headers */
+  parseRateLimitHeaders?: (headers: Record<string, string>) => RateLimitInfo | null;
+  /** Called when rate limit is detected and cooldown will occur */
+  onRateLimitHit?: (info: RateLimitHitContext) => void | Promise<void>;
+}
+
+/**
+ * Rate limit information extracted from response headers
+ */
+export interface RateLimitInfo {
+  /** Total requests allowed in the current window */
+  limit?: number;
+  /** Remaining requests in the current window */
+  remaining?: number;
+  /** Unix timestamp (seconds) when the rate limit resets */
+  reset?: number;
+  /** Seconds until the rate limit resets */
+  retryAfter?: number;
+}
+
+/**
+ * Context passed to onRateLimitHit callback
+ */
+export interface RateLimitHitContext {
+  /** URL that triggered the rate limit */
+  url: string;
+  /** HTTP status code (usually 429) */
+  status: number;
+  /** Parsed rate limit info from headers */
+  rateLimitInfo: RateLimitInfo;
+  /** Delay that will be applied in milliseconds */
+  delayMs: number;
+  /** Current pagination state */
+  pagination: PaginationState;
+}
+
+/**
+ * Internal state for tracking rate limits
+ */
+export interface RateLimitState {
+  /** Timestamp of last request */
+  lastRequestTime: number;
+  /** Current rate limit info from last response */
+  currentLimitInfo: RateLimitInfo | null;
+}
+
+/**
  * Main configuration for the lazy paginator
  */
 export interface LazyPaginatorConfig<TResponse, TItem> {
@@ -186,6 +244,10 @@ export interface LazyPaginatorConfig<TResponse, TItem> {
    * Requires ssrf-agent-guard package: npm install ssrf-agent-guard
    */
   ssrfProtection?: SsrfProtectionConfig;
+  /**
+   * Rate limiting configuration for throttling and respecting API rate limits
+   */
+  rateLimit?: RateLimitConfig;
 }
 
 /**

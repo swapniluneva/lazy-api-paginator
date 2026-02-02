@@ -14,6 +14,7 @@ A TypeScript module for lazily fetching paginated API data using async generator
 - Iterate over items one-by-one without loading all pages into memory
 - Built-in strategies for cursor, offset, page number, link header, and keyset pagination
 - Exponential backoff retry with configurable jitter
+- Rate limiting with request throttling and automatic 429 handling
 - Lifecycle hooks: `onBeforeFetch`, `onAfterFetch`, `onError`, `onData`
 - SSRF protection for secure server-to-server calls (via [ssrf-agent-guard](https://www.npmjs.com/package/ssrf-agent-guard))
 - Full TypeScript support
@@ -192,6 +193,32 @@ const keysetPaginator = createPaginator({
 });
 ```
 
+### Rate Limiting
+
+Configure request throttling and automatic handling of 429 (Too Many Requests) responses:
+
+```typescript
+const paginator = createPaginator<ApiResponse, User>({
+  initialUrl: 'https://api.example.com/users',
+  extractItems: (response) => response.data,
+  getNextPageUrl: (response) => response.nextCursor,
+  rateLimit: {
+    requestsPerSecond: 10,        // Throttle to 10 requests/sec
+    respectRetryAfter: true,      // Honor Retry-After headers
+    maxRateLimitDelay: 60000,     // Max wait time: 60 seconds
+    onRateLimitHit: ({ url, delayMs }) => {
+      console.log(`Rate limited on ${url}, waiting ${delayMs}ms`);
+    },
+  },
+});
+```
+
+The paginator automatically:
+- Throttles requests to stay within `requestsPerSecond`
+- Parses `X-RateLimit-*`, `RateLimit-*`, and `Retry-After` headers
+- Waits and retries when receiving 429 responses
+- Preemptively waits when rate limit is about to be exhausted
+
 ### SSRF Protection
 
 For server-to-server calls, enable SSRF (Server-Side Request Forgery) protection to block requests to internal networks, cloud metadata endpoints, and other potentially dangerous destinations.
@@ -253,6 +280,7 @@ Creates a new lazy paginator instance.
 | `getNextPageUrl` | `(response: TResponse, pagination: PaginationState) => string \| null` | Yes | Function to get next page URL (return null to stop) |
 | `requestConfig` | `RequestConfig` | No | HTTP request configuration |
 | `retry` | `RetryConfig` | No | Retry configuration |
+| `rateLimit` | `RateLimitConfig` | No | Rate limiting configuration |
 | `hooks` | `PaginatorHooks` | No | Lifecycle hooks |
 | `fetchFn` | `typeof fetch` | No | Custom fetch function |
 | `ssrfProtection` | `SsrfProtectionConfig` | No | SSRF protection settings |
