@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { createServer, IncomingMessage, ServerResponse, Server } from 'http';
 import { AddressInfo } from 'net';
-import { createPaginator } from './paginator.js';
-import { RateLimitHitContext } from './types.js';
+import { createPaginator } from '../core/paginator.js';
+import { RateLimitHitContext } from '../core/types.js';
 
 interface MockApiResponse {
   items: Array<{ id: number; name: string }>;

@@ -1,4 +1,4 @@
-import type { ItemExtractor, NextPageExtractor, PaginationState } from './types.js';
+import type { ItemExtractor, NextPageExtractor, PaginationState } from '../core/types.js';
 
 /**
  * Helper to get a nested value from an object using dot notation

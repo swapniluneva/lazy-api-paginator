@@ -1,5 +1,5 @@
 // Main exports
-export { LazyPaginator, createPaginator } from './paginator.js';
+export { LazyPaginator, createPaginator } from './core/paginator.js';
 
 // Type exports
 export type {
@@ -21,14 +21,14 @@ export type {
   RateLimitInfo,
   RateLimitState,
   RateLimitHitContext,
-} from './types.js';
+} from './core/types.js';
 
 // Error exports
 export {
   MaxRetriesExceededError,
   FetchTimeoutError,
   HttpError,
-} from './types.js';
+} from './core/types.js';
 
 // Retry utilities (for advanced usage)
 export {
@@ -38,10 +38,10 @@ export {
   withRetry,
   sleep,
   DEFAULT_RETRY_CONFIG,
-} from './retry.js';
+} from './utils/retry.js';
 
 // Built-in pagination strategies
-export { strategies } from './strategies.js';
+export { strategies } from './strategies/index.js';
 export type {
   StrategyResult,
   CursorStrategyConfig,
@@ -49,10 +49,10 @@ export type {
   PageNumberStrategyConfig,
   LinkHeaderStrategyConfig,
   KeysetStrategyConfig,
-} from './strategies.js';
+} from './strategies/index.js';
 
 // SSRF protection utilities
-export { createSecureFetch, validateUrl } from './ssrf.js';
+export { createSecureFetch, validateUrl } from './security/ssrf.js';
 
 // Rate limiting utilities (for advanced usage)
 export {
@@ -64,4 +64,4 @@ export {
   mergeRateLimitConfig,
   createRateLimitState,
   DEFAULT_RATE_LIMIT_CONFIG,
-} from './rate-limit.js';
+} from './utils/rate-limit.js';

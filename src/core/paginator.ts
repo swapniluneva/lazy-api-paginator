@@ -13,8 +13,8 @@ import {
   RateLimitState,
   RateLimitHitContext,
 } from './types.js';
-import { mergeRetryConfig, calculateBackoffDelay, shouldRetry } from './retry.js';
-import { createSecureFetch } from './ssrf.js';
+import { mergeRetryConfig, calculateBackoffDelay, shouldRetry } from '../utils/retry.js';
+import { createSecureFetch } from '../security/ssrf.js';
 import {
   mergeRateLimitConfig,
   createRateLimitState,
@@ -24,7 +24,7 @@ import {
   calculatePreemptiveDelay,
   shouldPreemptiveWait,
   sleep,
-} from './rate-limit.js';
+} from '../utils/rate-limit.js';
 
 /**
  * Default request configuration

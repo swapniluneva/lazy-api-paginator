@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createMockServer, MockPaginationServer, MockRecord } from './test-utils/mock-server.js';
-import { createPaginator, strategies } from './index.js';
+import { createMockServer, MockPaginationServer, MockRecord } from '../test-utils/mock-server.js';
+import { createPaginator, strategies } from '../index.js';
 
 describe('Integration Tests', () => {
   let baseUrl: string;

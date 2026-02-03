@@ -8,8 +8,8 @@ import {
   pageNumber,
   linkHeader,
   keyset,
-} from './strategies.js';
-import type { PaginationState } from './types.js';
+} from '../strategies/index.js';
+import type { PaginationState } from '../core/types.js';
 
 // Helper to create pagination state
 function createPaginationState(overrides: Partial<PaginationState> = {}): PaginationState {

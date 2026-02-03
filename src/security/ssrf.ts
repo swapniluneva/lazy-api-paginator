@@ -3,7 +3,7 @@
  * Requires ssrf-agent-guard package: npm install ssrf-agent-guard
  */
 
-import type { SsrfProtectionConfig } from './types.js';
+import type { SsrfProtectionConfig } from '../core/types.js';
 
 /**
  * Type for the ssrf-agent-guard module

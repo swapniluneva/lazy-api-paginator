@@ -1,4 +1,4 @@
-import { RateLimitConfig, RateLimitInfo, RateLimitState } from './types.js';
+import { RateLimitConfig, RateLimitInfo, RateLimitState } from '../core/types.js';
 import { sleep } from './retry.js';
 
 export { sleep };

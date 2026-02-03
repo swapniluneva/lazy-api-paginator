@@ -8,7 +8,7 @@ import {
   mergeRateLimitConfig,
   createRateLimitState,
   DEFAULT_RATE_LIMIT_CONFIG,
-} from './rate-limit.js';
+} from '../utils/rate-limit.js';
 
 describe('Rate limit utilities', () => {
   describe('mergeRateLimitConfig', () => {

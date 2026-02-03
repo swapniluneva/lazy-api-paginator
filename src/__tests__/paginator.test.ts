@@ -9,7 +9,7 @@ import {
   AfterFetchContext,
   ErrorContext,
   DataContext,
-} from './index.js';
+} from '../index.js';
 
 // Mock response type
 interface MockApiResponse {

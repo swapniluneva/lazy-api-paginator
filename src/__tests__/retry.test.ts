@@ -6,8 +6,8 @@ import {
   withRetry,
   sleep,
   DEFAULT_RETRY_CONFIG,
-} from './retry.js';
-import { HttpError } from './types.js';
+} from '../utils/retry.js';
+import { HttpError } from '../core/types.js';
 
 describe('Retry utilities', () => {
   describe('mergeRetryConfig', () => {

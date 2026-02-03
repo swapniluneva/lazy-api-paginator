@@ -1,4 +1,4 @@
-import { RetryConfig, HttpError } from './types.js';
+import { RetryConfig, HttpError } from '../core/types.js';
 
 /**
  * Default retry configuration

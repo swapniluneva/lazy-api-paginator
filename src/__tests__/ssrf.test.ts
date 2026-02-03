@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createSecureFetch, validateUrl, loadSsrfAgentGuard } from './ssrf.js';
+import { createSecureFetch, validateUrl, loadSsrfAgentGuard } from '../security/ssrf.js';
 
 describe('SSRF Protection', () => {
   describe('loadSsrfAgentGuard', () => {
@@ -124,7 +124,7 @@ describe('SSRF Protection', () => {
   describe('Integration with LazyPaginator', () => {
     it('should work with ssrfProtection config option', async () => {
       // This is an integration test to verify the config is properly typed
-      const { createPaginator } = await import('./index.js');
+      const { createPaginator } = await import('../index.js');
 
       // Mock fetch for this test
       const mockFetch = vi.fn().mockResolvedValue({
