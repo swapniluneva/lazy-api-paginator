@@ -6,7 +6,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 
-A TypeScript module for lazily fetching paginated API data using async generators. Features include exponential backoff retry logic and lifecycle hooks.
+The ultimate TypeScript engine for handling rate-limited, paginated API data stream using async generators..
+
+## Why lazy-api-paginator?
+
+| Traditional Pagination | Lazy API Paginator |
+| :--- | :--- |
+| Loads entire datasets into memory, risking crashes | Lazily yields items one-by-one via async generators |
+| Manual, complex while-loops for token/cursor matching | Out-of-the-box strategies for Slack, GitHub, Stripe, and Laravel |
+| Crashing on 429 Too Many Requests errors | Built-in request throttling and smart Retry-After header parsing |
 
 ## Features
 
@@ -141,7 +149,7 @@ Use pre-built strategies to eliminate boilerplate for common API patterns:
 ```typescript
 import { createPaginator, strategies } from 'lazy-api-paginator';
 
-// Cursor-based (Slack, Stripe, Notion)
+// Optimized for Stripe, Slack, and Notion Cursor Pagination
 const cursorPaginator = createPaginator({
   initialUrl: 'https://api.slack.com/users.list',
   ...strategies.cursor({
